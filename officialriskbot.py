@@ -213,6 +213,10 @@ def find_userid_by_name(ctx, name):
     conn.close()
     return out
 
+@client.event
+async def on_ready():
+    print("Bot has now logged on")
+
 @tasks.loop(seconds=10)
 async def autokicktimer():
 
@@ -2583,7 +2587,7 @@ async def stats(ctx):
         if total_games == 0:
             await ctx.channel.send(f"{name} played no games and has an elo of **{elo:.1f}**.")
         else:
-            await ctx.channel.send(f"**{name}** has played **{total_games}** games with a win rate of **{(win / total_games) * 100:.1f}%** (**{win}**W - **{loss}**L). ELO: **{elo:.1f}**. Sigma: **{sigma:.1f}**. Streak: **{streak}**. Rank: **{rank if rank else 'Need 20 games minimum.'}**.")
+            await ctx.channel.send(f"**{name}** has played **{total_games}** games with a win rate of **{(win / total_games) * 100:.1f}%** (**{win}**W - **{loss}**L). ELO: **{elo:.1f}**. Sigma: **{sigma:.1f}**. Streak: **{streak}**. Rank: **{rank if rank else 'Need 20 games minimum'}**.")
         
         grandmaster = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/grandmaster.png"
         master = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/master.png"
@@ -2597,31 +2601,42 @@ async def stats(ctx):
 
         if rank == 1:
             url = grandmaster
-            emoji = "<:0_:799828770110439425>"
+            emoji = "<:grandmaster:821047027257311234>"
 
         if 2 <= rank and rank <= 4:
             url = master
-            emoji = "<:1_:799828770402861146>"
+            emoji = "<:master:821047027412631603>"
         
         if 5 <= rank and rank <= 8:
+            url = adept
+            emoji = "<:adept:821047027391660094>"
+
+        if 9 <= rank and rank <= 12:
             url = diamond
-            emoji = "<:2_:799828770470363136>"
+            emoji = "<:diamond:821047028237860924>"
 
-        if 9 <= rank and rank <= 13:
+        if 13 <= rank and rank <= 16:
             url = platinum
-            emoji = "<:3_:799828770100871220>"
+            emoji = "<:platinum:821047027584467004>"
 
-        if 14 <= rank and rank <= 19:
+        if 17 <= rank and rank <= 20:
             url = gold
-            emoji = "<:4_:799828770541928478>"
-
-        if 20 <= rank and rank <= 30:
+            emoji = "<:gold:821047027675955200>"
+        
+        if 21 <= rank and rank <= 24:
             url = silver
-            emoji = "<:5_:799828770562244639>"
+            emoji = "<:silver:821047027374751806>"
+        
+        if 25 <= rank and rank <= 28:
+            url = bronze
+            emoji = "<:bronze:821047027575422996>"
         
         if rank > 30:
-            url = bronze
-            emoji = "<:6_:799828770651111445>"
+            url = grass
+            emoji = "<:grass:821047027638992966>"
+
+        for emoji in ctx.guild.emojis:
+            print(f"<:{emoji.name}:{emoji.id}>")
     else:
         await ctx.channel.send("No user found by that name!")
 
@@ -4559,5 +4574,5 @@ async def simulate(ctx, *args):
     await ctx.send(s)
 
     conn.close()
-    
-client.run("XXXxX")
+
+# client.run("XXXxX")
