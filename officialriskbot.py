@@ -2582,12 +2582,6 @@ async def stats(ctx):
     if player is not None:
         name, elo, sigma, win, loss, streak, peak_elo, rank = player
         total_games = win + loss
-        if streak > 0:
-            streak = f"{streak}"
-        if total_games == 0:
-            await ctx.channel.send(f"{name} played no games and has an elo of **{elo:.1f}**.")
-        else:
-            await ctx.channel.send(f"**{name}** has played **{total_games}** games with a win rate of **{(win / total_games) * 100:.1f}%** (**{win}**W - **{loss}**L). ELO: **{elo:.1f}**. Sigma: **{sigma:.1f}**. Streak: **{streak}**. Rank: **{rank if rank else 'Need 20 games minimum'}**.")
         
         grandmaster = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/grandmaster.png"
         master = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/master.png"
@@ -2599,44 +2593,56 @@ async def stats(ctx):
         bronze = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/bronze.png"
         grass = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/grass.png"
 
-        if rank == 1:
+        if rank is None:
+            url = grass
+            emoji = "<:grass:821047027638992966>"
+        elif rank == 1:
             url = grandmaster
             emoji = "<:grandmaster:821047027257311234>"
-
-        if 2 <= rank and rank <= 4:
+        elif rank <= 4:
             url = master
             emoji = "<:master:821047027412631603>"
-        
-        if 5 <= rank and rank <= 8:
+        elif rank <= 8:
             url = adept
             emoji = "<:adept:821047027391660094>"
-
-        if 9 <= rank and rank <= 12:
+        elif rank <= 12:
             url = diamond
             emoji = "<:diamond:821047028237860924>"
-
-        if 13 <= rank and rank <= 16:
+        elif rank <= 16:
             url = platinum
             emoji = "<:platinum:821047027584467004>"
-
-        if 17 <= rank and rank <= 20:
+        elif rank <= 20:
             url = gold
             emoji = "<:gold:821047027675955200>"
-        
-        if 21 <= rank and rank <= 24:
+        elif rank <= 24:
             url = silver
             emoji = "<:silver:821047027374751806>"
-        
-        if 25 <= rank and rank <= 28:
+        elif rank <= 28:
             url = bronze
             emoji = "<:bronze:821047027575422996>"
-        
-        if rank > 30:
+        else:
             url = grass
             emoji = "<:grass:821047027638992966>"
 
-        for emoji in ctx.guild.emojis:
-            print(f"<:{emoji.name}:{emoji.id}>")
+        # for emoji in ctx.guild.emojis:
+        #     print(f"<:{emoji.name}:{emoji.id}>")
+
+        if total_games == 0:
+            await ctx.channel.send(f"{name} played no games and has an elo of **{elo:.1f}**.")
+        else:
+            rp = "incomplete"
+            await ctx.channel.send(f"**{name}** has played **{total_games}** games with a win rate of **{(win / total_games) * 100:.1f}%** (**{win}**W - **{loss}**L). ELO: **{elo:.1f}**. Sigma: **{sigma:.1f}**. Streak: **{streak}**. Rank: **{rank if rank else 'Need 20 games minimum'}**.")
+            embed = discord.Embed(
+                colour=0x1F1E1E
+            )
+            embed.set_thumbnail(url=f"{url}")
+            embed.add_field(name=f"{name} {emoji}\n\u200b",
+                            value=f"Rank: **{rank if rank else 'Need 20 games minimum'}** | **{win}**W-**{loss}**L **{(win / total_games) * 100:.1f}**%\n\nRecent Performance:\n{rp}",
+                            inline=False)
+            embed.add_field(name='\n\u200b', value=f'Elo: **{elo:.1f}**')
+            embed.add_field(name='\n\u200b', value=f'Sigma: **{sigma:.1f}**')
+            embed.add_field(name='\n\u200b', value=f'Streak: **{peak}**')
+            await ctx.send(embed=embed)
     else:
         await ctx.channel.send("No user found by that name!")
 
