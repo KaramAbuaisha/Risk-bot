@@ -321,13 +321,16 @@ async def stats(ctx):
             c.execute("SELECT total_warns FROM warnings WHERE ID = ?", [t])
             warnings = c.fetchone()[0]
 
-            grandmaster = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/grandmaster.png"
-            master = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/master.png"
-            diamond = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/diamond.png"
-            platinum = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/platinum.png"
-            gold = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/gold.png"
-            silver = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/silver.png"
-            bronze = "https://raw.githubusercontent.com/w3champions/w3champions-ui/master/src/assets/leagueFlags/bronze.png"
+            grandmaster = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/grandmaster.png"
+            master = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/master.png"
+            adept = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/adept.png""
+            diamond = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/diamond.png"
+            platinum = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/platinum.png"
+            gold = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/gold.png"
+            silver = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/silver.png"
+            bronze = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/bronze.png"
+            grass = "https://raw.githubusercontent.com/KaramAbuaisha/Risk-bot/clean/assets/league-icons/grass.png"
+
 
             if streak > 0:
                 streak = f"{streak}"
@@ -414,3 +417,12 @@ async def stats(ctx):
 
         conn.commit()
         conn.close()
+
+def isName(memberName, member):
+    name = member.display_name
+    name = name.upper()
+    pattern = re.compile('[\W_]+')
+    if memberName.upper() in pattern.sub('', name).upper():
+        return True
+    else:
+        return False
