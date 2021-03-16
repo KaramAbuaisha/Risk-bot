@@ -417,3 +417,12 @@ async def stats(ctx):
 
         conn.commit()
         conn.close()
+
+def isName(memberName, member):
+    name = member.display_name
+    name = name.upper()
+    pattern = re.compile('[\W_]+')
+    if memberName.upper() in pattern.sub('', name).upper():
+        return True
+    else:
+        return False
