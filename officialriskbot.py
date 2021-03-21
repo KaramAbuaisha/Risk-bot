@@ -13,14 +13,18 @@ from discord.ext import commands
 
 db_path = "risk_old_clean.db"
 
-main_elo = trueskill.TrueSkill(mu=1500, draw_probability=0, backend="mpmath", sigma=400, tau=10, beta=200)
+main_elo = trueskill.TrueSkill(mu=1500, draw_probability=0, backend="mpmath", sigma=400, tau=6, beta=200)
 main_elo.make_as_global()
 
+WC3 = True
 # Channel ID's
 
-ones_channel = discord.Object(790313550270693396)
-teams_channel = discord.Object(790313583484731422)
-
+if WC3:
+    ones_channel = discord.Object(790313550270693396)
+    teams_channel = discord.Object(790313583484731422)
+else:
+    ones_channel = discord.Object(813561724812656710)
+    teams_channel = discord.Object(813561746388287540)
 # Discord Client
 
 client = discord.Client()
@@ -125,29 +129,29 @@ def find_userid_by_name(ctx, name):
         server = ctx.message.guild
         if name[0:2] == "<@":
             if name[2] == "!":
-                player = get_member(name[3:-1])
+                player = ctx.guild.get_member(int(name[3:-1]))
             else:
-                player = get_member(name[2:-1])
+                player = ctx.guild.get_member(int(name[2:-1]))
             if player is not None:
                 out = player.id
         else:
             # Test to see if it's a username
-            player = server.get_member_named(name)
-            if player is not None:
-                out = player.id
+            # player = server.get_member_named(name)
+            # if player is not None:
+            #     out = player.id
+            # else:
+            # Check the database to see if it's a username
+            c.execute(f"SELECT ID FROM {players_table} WHERE name LIKE ?", [name])
+            result = c.fetchone()
+            if result is not None:
+                out = result[0]
             else:
-                # Check the database to see if it's a username
-                c.execute(f"SELECT ID FROM {players_table} WHERE name LIKE ?", [name])
+                # Check the database to see if it's LIKE a username
+                wildcard_name = name + "%"
+                c.execute(f"SELECT ID FROM {players_table} WHERE name LIKE ?", [wildcard_name])
                 result = c.fetchone()
                 if result is not None:
                     out = result[0]
-                else:
-                    # Check the database to see if it's LIKE a username
-                    wildcard_name = name + "%"
-                    c.execute(f"SELECT ID FROM {players_table} WHERE name LIKE ?", [wildcard_name])
-                    result = c.fetchone()
-                    if result is not None:
-                        out = result[0]
     conn.commit()
     conn.close()
     if out is not None:
@@ -165,7 +169,10 @@ async def leaderboard_team(ctx):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     guild = ctx.guild
-    leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
+    if WC3:
+        leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
+    else:
+        leaderboard_channel = discord.utils.get(guild.channels, id=813561945940033557)
 
     await leaderboard_channel.purge(limit=15)
 
@@ -185,7 +192,7 @@ async def leaderboard_team(ctx):
         sigma = float(sigma)
         peak_elo = float(peak_elo)
 
-        name = safeName(name[:20])
+        # name = safeName(name[:20])
         rank = i + 1
         total_games = win + loss
 
@@ -220,7 +227,11 @@ async def leaderboard_solo(ctx):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     guild = ctx.guild
-    leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
+
+    if WC3:
+        leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
+    else:
+        leaderboard_channel = discord.utils.get(guild.channels, id=813561724812656710)
 
     await leaderboard_channel.purge(limit=15)
 
@@ -248,7 +259,7 @@ async def leaderboard_solo(ctx):
         sigma = float(sigma)
         peak_elo = float(peak_elo)
 
-        name = safeName(name[:20])
+        # name = safeName(name[:20])
         rank = i + 1
         total_games = win + loss
         # member = guild.get_member(player[5])
@@ -368,6 +379,7 @@ async def unregister(ctx):
     await ctx.send("League role removed.")
 
 @client.command()
+@commands.has_any_role('League Admin')
 async def search(ctx, gn):
     """Searches through Warcraft III gamelist."""
     
@@ -376,7 +388,7 @@ async def search(ctx, gn):
     gamelist = result.json()
     
     games = []
-    for game in gamelist ['body']:
+    for game in gamelist['body']:
         if re.search(gn, game['name'], re.IGNORECASE):
             slots_taken = game['slotsTaken']
             slots_total = game['slotsTotal']
@@ -493,12 +505,12 @@ async def stats(ctx, name=None):
         elif rank <= 24:
             url = silver
             emoji = "<:silver:821047027374751806>"
-        elif rank <= 28:
+        else:
             url = bronze
             emoji = "<:bronze:821047027575422996>"
-        else:
-            url = grass
-            emoji = "<:grass:821047027638992966>"
+        # else:
+        #     url = grass
+        #     emoji = "<:grass:821047027638992966>"
 
         # for emoji in ctx.guild.emojis:
         #     print(f"<:{emoji.name}:{emoji.id}>")
@@ -823,37 +835,12 @@ async def compare(ctx, p1, p2):
 @client.command()
 @commands.cooldown(3, 5, commands.BucketType.user)
 @commands.has_any_role('League Admin')
-async def set_elo(ctx, name, adjustment):
+async def set_elo(ctx, name, new_val):
     '''Adjusts a players ELO.'''
 
     global db_path
     
-    adjustment = int(adjustment)
-
-    if ctx.channel.id == ones_channel.id:
-        player_id = find_userid_by_name(ctx, name)
-        if player_id is None:
-            await ctx.send("No user found by that name!")
-            return
-
-        # user = find_user_by_name(ctx, name)
-
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        c.execute("SELECT name, elo FROM players WHERE ID = ?", [player_id])
-        player = c.fetchone()
-
-        if player is not None:
-            name = player[0]
-            c.execute("UPDATE players SET elo = ? WHERE ID = ?",
-                      [adjustment, player_id])
-
-            out = ctx.message.author.name + "has set " + name + "'s Sigma to **" + str(adjustment) + "**!"
-            activity_channel = client.get_channel(790313358816968715)
-            await ctx.send(out)
-            await activity_channel.send(out)
-        conn.commit()
-        conn.close()
+    new_val = int(new_val)
 
     if ctx.channel.id == teams_channel.id:
         player_id = find_userid_by_name(ctx, name)
@@ -871,24 +858,51 @@ async def set_elo(ctx, name, adjustment):
         if player is not None:
             name = player[0]
             c.execute("UPDATE players_team SET elo = ? WHERE ID = ?",
-                      [adjustment, player_id])
+                      [new_val, player_id])
 
-            out = ctx.message.author.name + "has set " + name + "'s Sigma to **" + str(adjustment) + "**!"
+            out = f"{ctx.message.author.name} has set {name}'s Elo to **{new_val}**!"
             activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
             await activity_channel.send(out)
-        conn.commit()
+            conn.commit()
+            await leaderboard_team(ctx)
         conn.close()
+    else:
+        player_id = find_userid_by_name(ctx, name)
+        if player_id is None:
+            await ctx.send("No user found by that name!")
+            return
+
+        # user = find_user_by_name(ctx, name)
+
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("SELECT name, elo FROM players WHERE ID = ?", [player_id])
+        player = c.fetchone()
+
+        if player is not None:
+            name = player[0]
+            c.execute("UPDATE players SET elo = ? WHERE ID = ?",
+                      [new_val, player_id])
+
+            out = f"{ctx.message.author.name} has set {name}'s Elo to **{new_val}**!"
+            activity_channel = client.get_channel(790313358816968715)
+            await ctx.send(out)
+            await activity_channel.send(out)
+            conn.commit()
+            await leaderboard_solo(ctx)
+        conn.close()
+
 
 @client.command()
 @commands.cooldown(3, 5, commands.BucketType.user)
 @commands.has_any_role('League Admin')
-async def set_sigma(ctx, name, adjustment):
+async def set_sigma(ctx, name, new_val):
     '''Adjusts a players Sigma.'''
 
     global db_path
 
-    adjustment = int(adjustment)
+    new_val = int(new_val)
 
     if ctx.channel.id == ones_channel.id:
         player_id = find_userid_by_name(ctx, name)
@@ -906,10 +920,10 @@ async def set_sigma(ctx, name, adjustment):
         if player is not None:
             name = player[0]
             c.execute("UPDATE players SET sigma = ? WHERE ID = ?",
-                      [adjustment, player_id])
+                      [new_val, player_id])
 
 
-            out = ctx.message.author.name + "has set " + name + "'s Sigma to **" + str(adjustment) + "**!"
+            out = f"{ctx.message.author.name} has set {name}'s Sigma to **{new_val}**!"
 
             activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
@@ -933,9 +947,9 @@ async def set_sigma(ctx, name, adjustment):
         if player is not None:
             name = player[0]
             c.execute("UPDATE players_team SET sigma = ? WHERE ID = ?",
-                      [adjustment, player_id])
+                      [new_val, player_id])
 
-            out = ctx.message.author.name + "has set " + name + "'s Sigma to **" + str(adjustment) + "**!"
+            out = f"{ctx.message.author.name} has set {name}'s Sigma to **{new_val}**!"
             activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
             await activity_channel.send(out)
