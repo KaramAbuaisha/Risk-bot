@@ -1,3 +1,4 @@
+import argparse
 import sqlite3
 import numpy as np
 import trueskill
@@ -11,27 +12,20 @@ import discord
 from discord.ext.commands import bot
 from discord.ext import commands
 
-db_path = "risk_old_clean.db"
-
 main_elo = trueskill.TrueSkill(mu=1500, draw_probability=0, backend="mpmath", sigma=400, tau=6, beta=200)
 main_elo.make_as_global()
 
-WC3 = True
-# Channel ID's
-
-if WC3:
-    ones_channel = discord.Object(790313550270693396)
-    teams_channel = discord.Object(790313583484731422)
-else:
-    ones_channel = discord.Object(813561724812656710)
-    teams_channel = discord.Object(813561746388287540)
 # Discord Client
-
 client = discord.Client()
 bot_prefix = "!"
 intents = discord.Intents.default()
 intents.members = True
 client = commands.Bot(command_prefix=bot_prefix, intents=intents)
+
+ones_channel = discord.Object(790313550270693396)
+teams_channel = discord.Object(790313583484731422)
+db_path = "risk_old_clean.db"
+
 # client.remove_command("help") #removes default help command
 def erfc(x):
     """Complementary error function (via `http://bit.ly/zOLqbc`_)"""
@@ -169,10 +163,7 @@ async def leaderboard_team(ctx):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     guild = ctx.guild
-    if WC3:
-        leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
-    else:
-        leaderboard_channel = discord.utils.get(guild.channels, id=813561945940033557)
+    leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
 
     await leaderboard_channel.purge(limit=15)
 
@@ -228,10 +219,7 @@ async def leaderboard_solo(ctx):
     c = conn.cursor()
     guild = ctx.guild
 
-    if WC3:
-        leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
-    else:
-        leaderboard_channel = discord.utils.get(guild.channels, id=813561724812656710)
+    leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
 
     await leaderboard_channel.purge(limit=15)
 
@@ -244,8 +232,8 @@ async def leaderboard_solo(ctx):
         for member in role.members:
             prev_role_assignment[role_name].add(member.id)
             # await member.remove_roles(role)
-    
-    curr_role_assignment = defaultdict(set)
+        
+        curr_role_assignment = defaultdict(set)
     for i, player in enumerate(c.execute("""SELECT name, win, loss, elo, peak_elo, id, sigma 
                                               FROM players 
                                              WHERE win + loss > 19
@@ -308,7 +296,6 @@ async def leaderboard_solo(ctx):
             await leaderboard_channel.send(msg + '```')
             msg = "```\n"
         
-
     for role_name in ["Grandmaster", "Master", "Adept", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]:
         role = discord.utils.get(ctx.guild.roles, name=role_name)
         for member_id in prev_role_assignment[role_name]:
@@ -1421,4 +1408,25 @@ async def simulate(ctx, *args):
 
     conn.close()
 
-# client.run("XXXxX")
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Run risk bot.')
+    parser.add_argument('--token', help='discord token', required=True)
+    parser.add_argument('--SC2', action='store_true', help='run SC2 bot')
+
+    args = parser.parse_args()
+
+    # Channel ID's
+
+    # if args.SC2:
+    #     ones_channel = discord.Object(813561724812656710)
+    #     teams_channel = discord.Object(813561746388287540)
+    #     WC3 = False
+    #     db_path = "sc2.db"
+    # else:
+    #     ones_channel = discord.Object(790313550270693396)
+    #     teams_channel = discord.Object(790313583484731422)
+    #     WC3 = True
+    #     db_path = "risk_old_clean.db"
+
+    client.run(args.token)
