@@ -297,11 +297,28 @@ async def leaderboard_solo(ctx):
         curr_role_assignment = defaultdict(set)
 
     rank = 0
+    games_required = 20
+    num_days = 20
     for i, player in enumerate(c.execute("""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time)
                                               FROM players 
                                              WHERE win + loss > 9
                                              AND strftime('%s', 'now') - last_played_time < 86400 * 14
                                              ORDER BY elo desc""").fetchall()):
+
+    # for i, player in enumerate(c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago
+    #                                             FROM players 
+    #                                             WHERE id in (SELECT p
+    #                                                         FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+    #                                                             left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+    #                                                             USING(p)
+    #                                                             UNION ALL
+    #                                                             SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+    #                                                             left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+    #                                                             USING(p)
+    #                                                             WHERE tbl1.p is NULL)
+    #                                                         WHERE num > {games_required-1})
+    #                                             ORDER BY elo desc""").fetchall()):
+
         name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago  = player
         player_id = int(player_id)
         win = int(win)
@@ -385,6 +402,21 @@ async def leaderboard_solo(ctx):
                                              WHERE win + loss > 9
                                              AND strftime('%s', 'now') - last_played_time >= 86400 * 14
                                              ORDER BY elo desc""").fetchall()):
+
+    # for i, player in enumerate(c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago
+    #                                             FROM players 
+    #                                             WHERE NOT id in (SELECT p
+    #                                                         FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+    #                                                             left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+    #                                                             USING(p)
+    #                                                             UNION ALL
+    #                                                             SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+    #                                                             left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+    #                                                             USING(p)
+    #                                                             WHERE tbl1.p is NULL)
+    #                                                         WHERE num > {games_required-1})
+    #                                             ORDER BY elo desc""").fetchall()):
+
         name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago  = player
         player_id = int(player_id)
         win = int(win)
@@ -1260,8 +1292,8 @@ async def compare(ctx, p1, p2):
             s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have played a total of {wins + losses} games together.\n"
             s += f"{name1} has a win rate of {wins/(wins+losses)*100:.2f}% (**{wins}W - {losses}L**) against {name2}.\n"
             s += get_x(20)
-            s += get_x(30)
-            s += get_x(40)
+            # s += get_x(30)
+            # s += get_x(40)
             s += get_x(50)
         else:
             s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have not played any games together.\n"
@@ -1793,11 +1825,11 @@ async def record(ctx, *args):
         game_id += 1
 
         if result == 1:
-            c.execute(f"INSERT INTO {games_table} VALUES(?, ?, ?, ?, ?)",  [str(game_id), str(player1), str(player2), "won", "lost"])
+            c.execute(f"INSERT INTO {games_table} VALUES(?, ?, ?, ?, ?, strftime('%s', 'now'))",  [str(game_id), str(player1), str(player2), "won", "lost"])
             player_won = player1
             player_lost = player2
         else:
-            c.execute(f"INSERT INTO {games_table} VALUES(?, ?, ?, ?, ?)", [str(game_id), str(player1), str(player2), "lost", "won"])
+            c.execute(f"INSERT INTO {games_table} VALUES(?, ?, ?, ?, ?, strftime('%s', 'now'))", [str(game_id), str(player1), str(player2), "lost", "won"])
             player_won = player2
             player_lost = player1
         
