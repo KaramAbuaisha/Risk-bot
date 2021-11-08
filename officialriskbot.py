@@ -4,13 +4,15 @@ import numpy as np
 import trueskill
 import re
 import requests
-import json
+import asyncio
 
-from collections import defaultdict, deque
+# import json
+
+from collections import defaultdict
 from copy import deepcopy
 
 import discord
-from discord.ext.commands import bot
+# from discord.ext.commands import bot
 from discord.ext import commands
 
 # Discord Client
@@ -124,7 +126,7 @@ def find_userid_by_name(ctx, name):
         out = ctx.message.author.id
     else:
         # Test to see if it's a ping
-        server = ctx.message.guild
+        # server = ctx.message.guild
         if name[0:2] == "<@":
             if name[2] == "!":
                 player = ctx.guild.get_member(int(name[3:-1]))
@@ -205,17 +207,12 @@ def find_userid_by_name_old(ctx, name):
     else:
         return None
 
-
-@client.event
-async def on_ready():
-    print("Bot has now logged on")
-
-async def leaderboard_team(ctx):
+async def leaderboard_team():
     """ Updates the leaderboard channel """
 
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    guild = ctx.guild
+    guild = client.get_guild(383292703955222542)
     leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
 
     await leaderboard_channel.purge(limit=15)
@@ -255,7 +252,7 @@ async def leaderboard_team(ctx):
     
     msg += "```"
 
-    role = discord.utils.get(ctx.guild.roles, name="Rank 1 Team")
+    role = discord.utils.get(guild.roles, name="Rank 1 Team")
     if role:
         for member in role.members:
             await member.remove_roles(role)
@@ -273,12 +270,12 @@ async def leaderboard_team(ctx):
     conn.close()
     await leaderboard_channel.send(msg)
 
-async def leaderboard_solo(ctx):
+async def leaderboard_solo():
     """ Updates the leaderboard channel """
 
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    guild = ctx.guild
+    guild = client.get_guild(383292703955222542)
 
     leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
 
@@ -289,7 +286,7 @@ async def leaderboard_solo(ctx):
 
     prev_role_assignment = defaultdict(set)
     for role_name in ["Grandmaster", "Master", "Expert", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]:
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+        role = discord.utils.get(guild.roles, name=role_name)
         for member in role.members:
             prev_role_assignment[role_name].add(member.id)
             # await member.remove_roles(role)
@@ -374,7 +371,7 @@ async def leaderboard_solo(ctx):
             
             curr_role_assignment[role_name].add(member.id)
             if member.id not in prev_role_assignment[role_name]:
-                role = discord.utils.get(ctx.guild.roles, name=role_name)
+                role = discord.utils.get(guild.roles, name=role_name)
                 await member.add_roles(role)
         
         if elo > peak_elo:
@@ -439,7 +436,7 @@ async def leaderboard_solo(ctx):
             msg = "```\n"
 
     for role_name in ["Grandmaster", "Master", "Expert", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]:
-        role = discord.utils.get(ctx.guild.roles, name=role_name)
+        role = discord.utils.get(guild.roles, name=role_name)
         for member_id in prev_role_assignment[role_name]:
             if member_id not in curr_role_assignment[role_name]:
                 member = guild.get_member(member_id)
@@ -448,7 +445,7 @@ async def leaderboard_solo(ctx):
     # c.execute("SELECT MAX(ELO), ID from players WHERE win + loss > 19")
     # player = c.fetchone()[1]
     # member = guild.get_member(player)
-    # role = discord.utils.get(ctx.guild.roles, name="Rank 1 Solo")
+    # role = discord.utils.get(guild.roles, name="Rank 1 Solo")
     # await role.members[0].remove_roles(role)
     # await member.add_roles(role)
     msg += "```"
@@ -1453,7 +1450,7 @@ async def set_elo(ctx, name, new_val):
             await ctx.send(out)
             await activity_channel.send(out)
             conn.commit()
-            await leaderboard_team(ctx)
+            await leaderboard_team()
         conn.close()
     else:
         player_id = find_userid_by_name(ctx, name)
@@ -1478,7 +1475,7 @@ async def set_elo(ctx, name, new_val):
             await ctx.send(out)
             await activity_channel.send(out)
             conn.commit()
-            await leaderboard_solo(ctx)
+            await leaderboard_solo()
         conn.close()
 
 
@@ -1548,14 +1545,12 @@ async def set_sigma(ctx, name, new_val):
 async def update_leaderboards(ctx):
     """ Manually updates the leaderboard."""
 
-    if ctx.channel.id == ones_channel.id or ctx.channel.id == teams_channel.id:
-
-        await leaderboard_solo(ctx)
-        await leaderboard_team(ctx)
-        t = ctx.message.author.name
-        activity_channel = client.get_channel(790313358816968715)
-        await ctx.send(str(t) + " has updated the leaderboard.")
-        await activity_channel.send(str(t) + " has updated the leaderboard.")
+    await leaderboard_solo()
+    await leaderboard_team()
+    t = ctx.message.author.name
+    activity_channel = client.get_channel(790313358816968715)
+    await ctx.send(str(t) + " has updated the leaderboard.")
+    await activity_channel.send(str(t) + " has updated the leaderboard.")
 
 
 @client.command()
@@ -1721,7 +1716,7 @@ async def record_team(ctx, *args):
         await activity_channel.send(f"[{game_type}] Games #{game_id-len(results)+1}-{game_id} have finished.")
         await ctx.send(f"[{game_type}] Games #{game_id-len(results)+1}-{game_id} have finished.")
 
-    await leaderboard_team(ctx)
+    await leaderboard_team()
 
 
 @client.command()
@@ -1892,7 +1887,7 @@ async def record(ctx, *args):
         await ctx.send(f"[1v1] Games #{game_id-len(results)+1}-{game_id} have finished.")
     
     await compare(ctx, name1, name2)
-    await leaderboard_solo(ctx)
+    await leaderboard_solo()
 
 @client.command()
 async def simulate(ctx, p1, p2, results_str):
@@ -2091,6 +2086,23 @@ async def simulate_team(ctx, *args):
 
     conn.close()
 
+async def my_background_task():
+
+    await client.wait_until_ready()
+    activity_channel = client.get_channel(790313358816968715)
+    print("task started")
+    while True:
+        await leaderboard_solo()
+        await leaderboard_team()
+        print("The leaderboards have automatically updated.")
+        await activity_channel.send("The leaderboards have automatically updated.")
+        await asyncio.sleep(86400) # task runs every day
+    print("bot down")
+
+@client.event
+async def on_ready():
+    print("Bot has now logged on")
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run risk bot.')
@@ -2109,5 +2121,6 @@ if __name__ == "__main__":
     #     ones_channel = discord.Object(790313550270693396)
     #     teams_channel = discord.Object(790313583484731422)
     #     db_path = "risk_old_clean.db"
-
+    client.loop.create_task(my_background_task())
     client.run(args.token)
+    
