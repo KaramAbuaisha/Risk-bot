@@ -1,4 +1,10 @@
+# Join start
+
 from discord.ext import tasks
+import datetime
+
+twos_channel = discord.Object(907161914893811742)
+threes_channel = discord.Object(907161942882390047)
 
 # Boolean
 
@@ -1900,3 +1906,5 @@ async def leave(ctx):
 
         conn.commit()
         conn.close()
+
+# Join end

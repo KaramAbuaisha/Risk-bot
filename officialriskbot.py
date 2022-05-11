@@ -8,7 +8,7 @@ import asyncio
 
 # import json
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from copy import deepcopy
 
 import discord
@@ -22,6 +22,9 @@ intents = discord.Intents.default()
 intents.members = True
 client = commands.Bot(command_prefix=bot_prefix, intents=intents)
 
+def activity_channel():
+    return client.get_channel(790313358816968715)
+# activity_channel = discord.TextChannel(790313358816968715)
 ones_channel = discord.Object(790313550270693396)
 teams_channel = discord.Object(790313583484731422)
 db_path = "risk.db"
@@ -30,7 +33,7 @@ db_path_old = "risk_old_clean.db"
 
 BETA=200
 
-main_elo = trueskill.TrueSkill(mu=1350, draw_probability=0, backend="mpmath", sigma=175, tau=6, beta=BETA)
+main_elo = trueskill.TrueSkill(mu=1500, draw_probability=0, backend="mpmath", sigma=200, tau=6, beta=BETA)
 main_elo.make_as_global()
 
 # client.remove_command("help") #removes default help command
@@ -64,54 +67,6 @@ def safeName(name):
     if safe_name == '':
         safe_name = "Shitname"
     return safe_name
-
-
-def find_user_by_name(ctx, name):
-    conn = sqlite3.connect(db_path, uri=True)
-    c = conn.cursor()
-    out = None
-
-    if len(name) == 0:
-        # Tried without an input
-        out = ctx.message.author
-    else:
-        # Test to see if it's a ping
-        server = ctx.message.guild
-        if name[0:2] == "<@":
-            if name[2] == "!":
-                player = server.get_member(name[3:-1])
-            else:
-                player = server.get_member(name[2:-1])
-            if player is not None:
-                out = player
-        else:
-            # Test to see if it's a username
-            player = server.get_member_named(name)
-            if player is not None:
-                out = player
-            else:
-                # Check the database to see if it's a username
-                conn = sqlite3.connect(db_path, uri=True)
-
-                c = conn.cursor()
-                c.execute("SELECT ID FROM players WHERE name LIKE ?", [name])
-                result = c.fetchone()
-                if result is not None:
-                    player = server.get_member(result[0])
-                    if player is not None:
-                        out = player
-                else:
-                    # Check the database to see if it's LIKE a username
-                    wildcard_name = name + "%"
-                    c.execute("SELECT ID FROM players WHERE name LIKE ?", [wildcard_name])
-                    result = c.fetchone()
-                    if result is not None:
-                        player = server.get_member(result[0])
-                        if player is not None:
-                            out = player
-    conn.commit()
-    conn.close()
-    return out
 
 def find_userid_by_name(ctx, name):
     conn = sqlite3.connect(db_path, uri=True)
@@ -215,7 +170,9 @@ async def leaderboard_team():
     guild = client.get_guild(383292703955222542)
     leaderboard_channel = discord.utils.get(guild.channels, id=787070684106194954)
 
-    await leaderboard_channel.purge(limit=15)
+    # await leaderboard_channel.purge(limit=15)
+    msg_ids = [908548020830887976]
+    msg_num = 0
 
     msg = "```\n"
     msg += "{:<4}  {:<25}  {:<10} {:<10} {:<10}".format('RANK', 'NAME', 'ELO', 'SIGMA', 'TOTAL GAMES') + "" + "\n"
@@ -246,11 +203,25 @@ async def leaderboard_team():
 
         msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<10}".format(f"#{rank}", name, f"{elo:.0f}", f"{sigma:.0f}", total_games) + "\n"
         
-        if rank % 25 == 0:
-            await leaderboard_channel.send(msg + '```')
+        if rank % 15 == 0:
+            # await leaderboard_channel.send(msg + '```')
+            if msg_num >= len(msg_ids):
+                await leaderboard_channel.send(msg + '```')
+            else:
+                msg_id = msg_ids[msg_num]
+                msg_obj = await leaderboard_channel.fetch_message(msg_id)
+                await msg_obj.edit(content=msg + '```')
+            msg_num += 1
             msg = "```\n"
     
-    msg += "```"
+    if msg != "```\n":
+        # await leaderboard_channel.send(msg + '```')
+        if msg_num >= len(msg_ids):
+            await leaderboard_channel.send(msg + '```')
+        else:
+            msg_id = msg_ids[msg_num]
+            msg_obj = await leaderboard_channel.fetch_message(msg_id)
+            await msg_obj.edit(content=msg + '```')
 
     role = discord.utils.get(guild.roles, name="Rank 1 Team")
     if role:
@@ -268,7 +239,6 @@ async def leaderboard_team():
 
     conn.commit()
     conn.close()
-    await leaderboard_channel.send(msg)
 
 async def leaderboard_solo():
     """ Updates the leaderboard channel """
@@ -279,10 +249,12 @@ async def leaderboard_solo():
 
     leaderboard_channel = discord.utils.get(guild.channels, id=787070644427948142)
 
-    await leaderboard_channel.purge(limit=15)
+    # await leaderboard_channel.purge(limit=15)
+    msg_ids = [908548014937874483, 908548017341222982, 944326967119978566]
+    msg_num = 0
 
     msg = "```\n"
-    msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<13}".format('RANK', 'NAME', 'ELO', 'SIGMA', 'TOTAL GAMES', 'LAST PLAYED') + "" + "\n"
+    msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<17}  {:<13}".format('RANK', 'NAME', 'ELO', 'SIGMA', 'TOTAL GAMES', '% GAMES VS TOP 5', 'RECENT GAMES') + "" + "\n"
 
     prev_role_assignment = defaultdict(set)
     for role_name in ["Grandmaster", "Master", "Expert", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]:
@@ -294,30 +266,67 @@ async def leaderboard_solo():
         curr_role_assignment = defaultdict(set)
 
     rank = 0
-    games_required = 20
+    games_required = 10
     num_days = 20
-    for i, player in enumerate(c.execute("""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time)
-                                              FROM players 
-                                             WHERE win + loss > 9
-                                             AND strftime('%s', 'now') - last_played_time < 86400 * 14
-                                             ORDER BY elo desc""").fetchall()):
+    # for i, player in enumerate(c.execute("""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time)
+    #                                           FROM players 
+    #                                          WHERE win + loss > 9
+    #                                          AND strftime('%s', 'now') - last_played_time < 86400 * 14
+    #                                          ORDER BY elo desc""").fetchall()):
 
-    # for i, player in enumerate(c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago
-    #                                             FROM players 
-    #                                             WHERE id in (SELECT p
-    #                                                         FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
-    #                                                             left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
-    #                                                             USING(p)
-    #                                                             UNION ALL
-    #                                                             SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
-    #                                                             left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
-    #                                                             USING(p)
-    #                                                             WHERE tbl1.p is NULL)
-    #                                                         WHERE num > {games_required-1})
-    #                                             ORDER BY elo desc""").fetchall()):
+    for player in c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago, num
+                                                FROM players 
+                                                JOIN (SELECT p, num
+                                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                USING(p)
+                                                                UNION ALL
+                                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                USING(p)
+                                                                WHERE tbl1.p is NULL)
+                                                            WHERE num >= {games_required}) tbl
+                                                ON players.id = tbl.p
+                                                ORDER BY elo desc""").fetchall():
 
-        name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago  = player
+        name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago, num_games = player
+
         player_id = int(player_id)
+
+        games_vs_top_5 = c.execute(f"""
+        select count(*) from games
+        where (p1={player_id} and p2 in (SELECT id
+                                                FROM players 
+                                                JOIN (SELECT p, num
+                                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                USING(p)
+                                                                UNION ALL
+                                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                USING(p)
+                                                                WHERE tbl1.p is NULL)
+                                                            WHERE num >= {games_required}) tbl
+                                                ON players.id = tbl.p
+                                                ORDER BY elo desc
+                                                LIMIT 5))
+        or (p2={player_id} and p1 in (SELECT id
+                                                FROM players 
+                                                JOIN (SELECT p, num
+                                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                USING(p)
+                                                                UNION ALL
+                                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                USING(p)
+                                                                WHERE tbl1.p is NULL)
+                                                            WHERE num >= {games_required}) tbl
+                                                ON players.id = tbl.p
+                                                ORDER BY elo desc
+                                                LIMIT 5))""").fetchone()[0]
+
+
         win = int(win)
         loss = int(loss)
         elo = float(elo)
@@ -341,21 +350,11 @@ async def leaderboard_solo():
         conn.commit()
 
         member = guild.get_member(player_id)
-        if member is not None and rank >= 1 and rank <= 28:
+        if member is not None:
             if rank == 1:
                 role_name = "Grandmaster"
             elif rank <= 4:
-                role_name = "Master"
-            # elif rank <= 8:
-            #     role_name = "Diamond"
-            # elif rank <= 12:
-            #     role_name = "Platinum"
-            # elif rank <= 16:
-            #     role_name = "Gold"
-            # elif rank <= 20:
-            #     role_name = "Silver"
-            # else:
-            #     role_name = "Bronze"            
+                role_name = "Master"         
             elif rank <= 8:
                 role_name = "Expert"
             elif rank <= 12:
@@ -378,44 +377,76 @@ async def leaderboard_solo():
             c.execute("UPDATE players SET peak_elo = ? where ID = ?", [elo, player_id])
             conn.commit()
 
-        if seconds_ago < 86400:
-            tmp = "In the last 24 hrs"
-        else:
-            tmp = f"In the last {seconds_ago//86400 + 1} days"
-
-        msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<13}".format(f"#{rank}", name, f"{elo:.0f}", f"{sigma:.0f}", total_games, tmp) + "\n"
+        msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<17}  {:<13}".format(f"#{rank}", name, f"{elo:.0f}", f"{sigma:.0f}", total_games, round(100*games_vs_top_5/total_games, 2), num_games) + "\n"
         if rank % 15 == 0:
-            await leaderboard_channel.send(msg + '```')
+            # await leaderboard_channel.send(msg + '```')
+            if msg_num >= len(msg_ids):
+                await leaderboard_channel.send(msg + '```')
+            else:
+                msg_id = msg_ids[msg_num]
+                msg_obj = await leaderboard_channel.fetch_message(msg_id)
+                await msg_obj.edit(content=msg + '```')
+            msg_num += 1
             msg = "```\n"
-
+    
     # if not rank % 15 == 0:
     #     await leaderboard_channel.send(msg + '```')
     #     msg = "```\n"
 
     msg += "-"*44 + "INACTIVE" + "-"*44 + "\n"
+    
+    for player in c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago, COALESCE(num, 0) as num
+                                FROM players 
+                                left JOIN (SELECT p, num
+                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                USING(p)
+                                                UNION ALL
+                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                USING(p)
+                                                WHERE tbl1.p is NULL)) tbl
+                                ON players.id = tbl.p
+                                WHERE (num is null or num < {games_required}) and win + loss >= 10
+                                ORDER BY elo desc""").fetchall():
 
-    for i, player in enumerate(c.execute("""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time)
-                                              FROM players 
-                                             WHERE win + loss > 9
-                                             AND strftime('%s', 'now') - last_played_time >= 86400 * 14
-                                             ORDER BY elo desc""").fetchall()):
 
-    # for i, player in enumerate(c.execute(f"""SELECT name, win, loss, elo, peak_elo, id, sigma, (strftime('%s', 'now') - last_played_time) as seconds_ago
-    #                                             FROM players 
-    #                                             WHERE NOT id in (SELECT p
-    #                                                         FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
-    #                                                             left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
-    #                                                             USING(p)
-    #                                                             UNION ALL
-    #                                                             SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
-    #                                                             left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
-    #                                                             USING(p)
-    #                                                             WHERE tbl1.p is NULL)
-    #                                                         WHERE num > {games_required-1})
-    #                                             ORDER BY elo desc""").fetchall()):
-
-        name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago  = player
+        name, win, loss, elo, peak_elo, player_id, sigma, seconds_ago, num_games = player
         player_id = int(player_id)
+
+        games_vs_top_5 = c.execute(f"""
+        select count(*) from games
+        where (p1={player_id} and p2 in (SELECT id
+                                                FROM players 
+                                                JOIN (SELECT p, num
+                                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                USING(p)
+                                                                UNION ALL
+                                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                USING(p)
+                                                                WHERE tbl1.p is NULL)
+                                                            WHERE num >= {games_required}) tbl
+                                                ON players.id = tbl.p
+                                                ORDER BY elo desc
+                                                LIMIT 5))
+        or (p2={player_id} and p1 in (SELECT id
+                                                FROM players 
+                                                JOIN (SELECT p, num
+                                                            FROM (SELECT p, num1 + COALESCE(num2, 0) as num FROM (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                left JOIN (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                USING(p)
+                                                                UNION ALL
+                                                                SELECT p, num2 as num FROM (SELECT p2 as p, count(*) as num2 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p2)) as tbl2
+                                                                left JOIN (SELECT p1 as p, count(*) as num1 FROM games WHERE strftime('%s', 'now') - time < 86400 * {num_days} GROUP BY(p1)) as tbl1
+                                                                USING(p)
+                                                                WHERE tbl1.p is NULL)
+                                                            WHERE num >= {games_required}) tbl
+                                                ON players.id = tbl.p
+                                                ORDER BY elo desc
+                                                LIMIT 5))""").fetchone()[0]
+
         win = int(win)
         loss = int(loss)
         elo = float(elo)
@@ -428,11 +459,41 @@ async def leaderboard_solo():
         c.execute("UPDATE players SET rank = ? WHERE ID = ?", [rank, player_id])
         conn.commit()
 
-        tmp = f"In the last {seconds_ago//86400 + 1} days"
+        member = guild.get_member(player_id)
+        if member is not None:
+            if rank == 1:
+                role_name = "Grandmaster"
+            elif rank <= 4:
+                role_name = "Master"         
+            elif rank <= 8:
+                role_name = "Expert"
+            elif rank <= 12:
+                role_name = "Diamond"
+            elif rank <= 16:
+                role_name = "Platinum"
+            elif rank <= 20:
+                role_name = "Gold"
+            elif rank <= 24:
+                role_name = "Silver"
+            else:
+                role_name = "Bronze"
+            
+            curr_role_assignment[role_name].add(member.id)
+            if member.id not in prev_role_assignment[role_name]:
+                role = discord.utils.get(guild.roles, name=role_name)
+                await member.add_roles(role)
 
-        msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<13}".format(f"#{rank}", name, f"{elo:.0f}", f"{sigma:.0f}", total_games, tmp) + "\n"
+        msg += "{:<4}  {:<25}  {:<10}  {:<10}  {:<12}  {:<17}  {:<13}".format(f"#{rank}", name, f"{elo:.0f}", f"{sigma:.0f}", total_games, round(100*games_vs_top_5/total_games, 2), num_games) + "\n"
+        
         if rank % 15 == 0:
-            await leaderboard_channel.send(msg + '```')
+            # await leaderboard_channel.send(msg + '```')
+            if msg_num >= len(msg_ids):
+                await leaderboard_channel.send(msg + '```')
+            else:
+                msg_id = msg_ids[msg_num]
+                msg_obj = await leaderboard_channel.fetch_message(msg_id)
+                await msg_obj.edit(content=msg + '```')
+            msg_num += 1
             msg = "```\n"
 
     for role_name in ["Grandmaster", "Master", "Expert", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]:
@@ -448,17 +509,25 @@ async def leaderboard_solo():
     # role = discord.utils.get(guild.roles, name="Rank 1 Solo")
     # await role.members[0].remove_roles(role)
     # await member.add_roles(role)
-    msg += "```"
+
+    if msg != "```\n":
+        # await leaderboard_channel.send(msg + '```')
+        if msg_num >= len(msg_ids):
+            await leaderboard_channel.send(msg + '```')
+        else:
+            msg_id = msg_ids[msg_num]
+            msg_obj = await leaderboard_channel.fetch_message(msg_id)
+            await msg_obj.edit(content=msg + '```')
+
     conn.commit()
     conn.close()
-    await leaderboard_channel.send(msg)
+    
 
 @client.command()
 @commands.has_any_role('League Admin')
 async def register(ctx, member: discord.Member):
     '''Registers a user into the player database.'''
 
-        
     conn = sqlite3.connect(db_path)
 
     c = conn.cursor()
@@ -740,6 +809,7 @@ async def stats(ctx, name=None):
             await ctx.send("No user found by that name.")
             return
 
+    print(player_id)
     conn = sqlite3.connect(db_path, uri=True)
     c = conn.cursor()
     c.execute(f"SELECT name, elo, sigma, win, loss, streak, peak_elo, rank FROM {players_table} where ID = ?", [player_id])
@@ -977,24 +1047,6 @@ async def compare_old(ctx, p1, p2):
         wins_q.sort()
         losses_q.sort()
 
-        def erfc(x):
-            """Complementary error function (via `http://bit.ly/zOLqbc`_)"""
-            z = abs(x)
-            t = 1. / (1. + z / 2.)
-            r = t * np.math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (
-                0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (
-                    0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (
-                        -0.82215223 + t * 0.17087277
-                    )))
-                )))
-            )))
-            return 2. - r if x < 0 else r
-
-
-        def cdf(x, mu=0, sigma=1):
-            """Cumulative distribution function"""
-            return 0.5 * erfc(-(x - mu) / (sigma * np.math.sqrt(2)))
-
         win_probability = get_win_probability(elo1, sigma1, elo2, sigma2)
 
         if wins + losses > 0:
@@ -1157,8 +1209,6 @@ async def compare(ctx, p1, p2):
 
         conn = sqlite3.connect(db_path, uri=True)
         c = conn.cursor()
-
-        x = ctx.author.id
         
         t1 = find_userid_by_name(ctx, p1)
         if t1 is None:
@@ -1239,24 +1289,6 @@ async def compare(ctx, p1, p2):
         wins_q.sort()
         losses_q.sort()
 
-        def erfc(x):
-            """Complementary error function (via `http://bit.ly/zOLqbc`_)"""
-            z = abs(x)
-            t = 1. / (1. + z / 2.)
-            r = t * np.math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (
-                0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (
-                    0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (
-                        -0.82215223 + t * 0.17087277
-                    )))
-                )))
-            )))
-            return 2. - r if x < 0 else r
-
-
-        def cdf(x, mu=0, sigma=1):
-            """Cumulative distribution function"""
-            return 0.5 * erfc(-(x - mu) / (sigma * np.math.sqrt(2)))
-
         win_probability = get_win_probability(elo1, sigma1, elo2, sigma2)
 
         def get_x(x):
@@ -1305,8 +1337,6 @@ async def compare(ctx, p1, p2):
 
         conn = sqlite3.connect(db_path, uri=True)
         c = conn.cursor()
-
-        x = ctx.author.id
         
         t1 = find_userid_by_name(ctx, p1)
         if t1 is None:
@@ -1433,7 +1463,6 @@ async def set_elo(ctx, name, new_val):
             await ctx.send("No user found by that name!")
             return
 
-        # user = find_user_by_name(ctx, name)
 
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
@@ -1446,9 +1475,8 @@ async def set_elo(ctx, name, new_val):
                       [new_val, player_id])
 
             out = f"{ctx.message.author.name} has set {name}'s Elo to **{new_val}**!"
-            activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
-            await activity_channel.send(out)
+            await activity_channel().send(out)
             conn.commit()
             await leaderboard_team()
         conn.close()
@@ -1458,7 +1486,6 @@ async def set_elo(ctx, name, new_val):
             await ctx.send("No user found by that name!")
             return
 
-        # user = find_user_by_name(ctx, name)
 
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
@@ -1471,9 +1498,8 @@ async def set_elo(ctx, name, new_val):
                       [new_val, player_id])
 
             out = f"{ctx.message.author.name} has set {name}'s Elo to **{new_val}**!"
-            activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
-            await activity_channel.send(out)
+            await activity_channel().send(out)
             conn.commit()
             await leaderboard_solo()
         conn.close()
@@ -1493,8 +1519,6 @@ async def set_sigma(ctx, name, new_val):
             await ctx.send("No user found by that name!")
             return
 
-        # user = find_user_by_name(ctx, name)
-
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
         c.execute("SELECT name, sigma FROM players WHERE ID = ?", [player_id])
@@ -1505,12 +1529,10 @@ async def set_sigma(ctx, name, new_val):
             c.execute("UPDATE players SET sigma = ? WHERE ID = ?",
                       [new_val, player_id])
 
-
             out = f"{ctx.message.author.name} has set {name}'s Sigma to **{new_val}**!"
 
-            activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
-            await activity_channel.send(out)
+            await activity_channel().send(out)
         conn.commit()
         conn.close()
 
@@ -1519,8 +1541,6 @@ async def set_sigma(ctx, name, new_val):
         if player_id is None:
             await ctx.send("No user found by that name!")
             return
-
-        # user = find_user_by_name(ctx, name)
 
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
@@ -1533,9 +1553,8 @@ async def set_sigma(ctx, name, new_val):
                       [new_val, player_id])
 
             out = f"{ctx.message.author.name} has set {name}'s Sigma to **{new_val}**!"
-            activity_channel = client.get_channel(790313358816968715)
             await ctx.send(out)
-            await activity_channel.send(out)
+            await activity_channel().send(out)
         conn.commit()
         conn.close()
 
@@ -1543,14 +1562,13 @@ async def set_sigma(ctx, name, new_val):
 @commands.cooldown(1, 5, commands.BucketType.user)
 @commands.has_any_role('League Admin')
 async def update_leaderboards(ctx):
-    """ Manually updates the leaderboard."""
+    """ Manually updates the leaderboards."""
 
     await leaderboard_solo()
     await leaderboard_team()
     t = ctx.message.author.name
-    activity_channel = client.get_channel(790313358816968715)
-    await ctx.send(str(t) + " has updated the leaderboard.")
-    await activity_channel.send(str(t) + " has updated the leaderboard.")
+    await ctx.send(str(t) + " has updated the leaderboards.")
+    await activity_channel().send(str(t) + " has updated the leaderboards.")
 
 
 @client.command()
@@ -1641,7 +1659,6 @@ async def record_team(ctx, *args):
         await ctx.send("Unbalanced teams.")
         return
         
-    activity_channel = ctx.guild.get_channel(790313358816968715)
     conn = sqlite3.connect(db_path, uri=True)
     c = conn.cursor()
 
@@ -1710,10 +1727,10 @@ async def record_team(ctx, *args):
     conn.close()
 
     if len(results) == 1:
-        await activity_channel.send(f"[{game_type}] Game #{game_id} has finished.")
+        await activity_channel().send(f"[{game_type}] Game #{game_id} has finished.")
         await ctx.send(f"[{game_type}] Game #{game_id} has finished.")
     else:
-        await activity_channel.send(f"[{game_type}] Games #{game_id-len(results)+1}-{game_id} have finished.")
+        await activity_channel().send(f"[{game_type}] Games #{game_id-len(results)+1}-{game_id} have finished.")
         await ctx.send(f"[{game_type}] Games #{game_id-len(results)+1}-{game_id} have finished.")
 
     await leaderboard_team()
@@ -1752,7 +1769,9 @@ async def record(ctx, *args):
         c = team1_str[i]
         if c == "<":
             player_id = ""
-            i += 3 # <@!361548991755976704>
+            i += 2 # <@!361548991755976704>
+            if team1_str[i] == "!":
+                i+= 1
             c = team1_str[i]
             while c != ">":
                 player_id += c
@@ -1774,7 +1793,9 @@ async def record(ctx, *args):
         c = team2_str[i]
         if c == "<":
             player_id = ""
-            i += 3
+            i += 2
+            if team2_str[i] == "!":
+                i+= 1
             c = team2_str[i]
             while c != ">":
                 player_id += c
@@ -1789,8 +1810,6 @@ async def record(ctx, *args):
     if len(team2) > 1:
         await ctx.send("Team 2 has too many players (there should only be 1).")
         return
-
-    activity_channel = ctx.guild.get_channel(790313358816968715)
     conn = sqlite3.connect(db_path, uri=True)
     c = conn.cursor()
 
@@ -1801,6 +1820,7 @@ async def record(ctx, *args):
     player2 = team2[0]
     
     c.execute("SELECT name FROM players WHERE ID = ?", [player1])
+    print(player1, player2)
     name1 = c.fetchone()[0]
 
     c.execute("SELECT name FROM players WHERE ID = ?", [player2])
@@ -1880,14 +1900,27 @@ async def record(ctx, *args):
     conn.close()
 
     if len(results) == 1:
-        await activity_channel.send(f"[1v1] Game #{game_id} has finished.")
+        await activity_channel().send(f"[1v1] Game #{game_id} has finished.")
         await ctx.send(f"[1v1] Game #{game_id} has finished.")
     else:
-        await activity_channel.send(f"[1v1] Games #{game_id-len(results)+1}-{game_id} have finished.")
+        await activity_channel().send(f"[1v1] Games #{game_id-len(results)+1}-{game_id} have finished.")
         await ctx.send(f"[1v1] Games #{game_id-len(results)+1}-{game_id} have finished.")
     
     await compare(ctx, name1, name2)
     await leaderboard_solo()
+
+# @client.command()
+# @commands.has_any_role("League Admin")
+# async def delete_records(ctx, num_games):
+#     '''Admin command for recording 1v1s.'''
+
+#     conn = sqlite3.connect(db_path, uri=True)
+#     c = conn.cursor()
+#     c.execute(f""" DELETE from games where ID IN (SELECT ID from games order by ID desc limit {num_games})""")
+#     conn.commit()
+#     conn.close()
+    
+#     await leaderboard_solo()
 
 @client.command()
 async def simulate(ctx, p1, p2, results_str):
@@ -1911,10 +1944,9 @@ async def simulate(ctx, p1, p2, results_str):
     
     conn = sqlite3.connect(db_path, uri=True)
     c = conn.cursor()
-    t1 = find_userid_by_name_old(ctx, p1)
+    t1 = find_userid_by_name(ctx, p1)
     if t1 is None:
         await ctx.send("No user found by the name \"" + p1 + "\"!")
-        conn.commit()
         conn.close()
         return
     
@@ -1922,7 +1954,6 @@ async def simulate(ctx, p1, p2, results_str):
     result = c.fetchone()
     if result is None:
         await ctx.send("No user found by the name \"" + p1 + "\"!")
-        conn.commit()
         conn.close()
         return
 
@@ -1933,10 +1964,9 @@ async def simulate(ctx, p1, p2, results_str):
     player_1_rating = trueskill.Rating(elo1, sigma1)
     
 
-    t2 = find_userid_by_name_old(ctx, p2)
+    t2 = find_userid_by_name(ctx, p2)
     if t2 is None:
         await ctx.send("No user found by the name \"" + p2 + "\"!")
-        conn.commit()
         conn.close()
         return
     
@@ -1944,7 +1974,6 @@ async def simulate(ctx, p1, p2, results_str):
     result = c.fetchone()
     if result is None:
         await ctx.send("No user found by the name \"" + p2 + "\"!")
-        conn.commit()
         conn.close()
         return
 
@@ -1965,6 +1994,76 @@ async def simulate(ctx, p1, p2, results_str):
     s += f"{name2}: {player_2_rating.mu:.1f} (sigma={player_2_rating.sigma:.1f})\n"
 
     await ctx.send(s)
+
+    conn.close()
+
+@client.command()
+async def balance(ctx, *args):
+    players_table = "players"
+    if ctx.channel.id == teams_channel.id:
+        players_table += "_team"
+
+    if len(args) % 2 == 1:
+        await ctx.send("Uneven number of players.")
+        print("Uneven number of players")
+        print(args)
+
+    conn = sqlite3.connect(db_path, uri=True)
+    c = conn.cursor()
+
+    names = []
+    elos = []
+
+    for name in args:
+        id = find_userid_by_name(ctx, name)
+        if id is None:
+            await ctx.send("No user found by the name \"" + name + "\"!")
+            conn.close()
+            return
+
+        c.execute("SELECT name, elo FROM players where ID = ?", [id])
+        result = c.fetchone()
+        if result is None:
+            await ctx.send("No user found by the name \"" + name + "\"!")
+            conn.close()
+            return
+
+        name = result[0]
+        elo = float(result[1])
+
+        names.append(name)
+        elos.append(elo)
+    
+    elo_avg = np.mean(elos)
+    players_per_team = len(names)//2
+    best_diff = float('inf')
+    betterteam = True
+    curr_names = deque()
+    curr_elos = deque()
+    best_names = None
+
+    def dfs(idx=0, count=0):
+        nonlocal best_names, best_diff, betterteam
+        if (idx-count) < players_per_team:
+            dfs(idx+1, count)
+        curr_names.append(names[idx])
+        curr_elos.append(elos[idx])
+        if count+1 < players_per_team:
+            dfs(idx+1, count+1)
+        elif abs(np.mean(curr_elos) - elo_avg) < best_diff:
+            betterteam = 2 - (np.mean(curr_elos) - elo_avg >= 0)
+            best_diff = abs(np.mean(curr_elos) - elo_avg)
+            best_names = list(curr_names)
+        curr_names.pop()
+        curr_elos.pop()
+
+    dfs()
+
+    team1 = best_names
+    team2 = [n for n in names if n not in team1]
+    
+    await ctx.send(f"Team 1: {team1}, Team 2: {team2}")
+    await ctx.send(f"Average elo difference of {best_diff*2:.2f} in favor of Team {betterteam}")
 
     conn.close()
 
@@ -2089,13 +2188,12 @@ async def simulate_team(ctx, *args):
 async def my_background_task():
 
     await client.wait_until_ready()
-    activity_channel = client.get_channel(790313358816968715)
     print("task started")
     while True:
         await leaderboard_solo()
         await leaderboard_team()
         print("The leaderboards have automatically updated.")
-        await activity_channel.send("The leaderboards have automatically updated.")
+        await activity_channel().send("The leaderboards have automatically updated.")
         await asyncio.sleep(86400) # task runs every day
     print("bot down")
 
@@ -2107,20 +2205,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Run risk bot.')
     parser.add_argument('--token', help='discord token', required=True)
-    # parser.add_argument('--SC2', action='store_true', help='run SC2 bot')
 
     args = parser.parse_args()
 
-    # Channel ID's
-
-    # if args.SC2:
-    #     ones_channel = discord.Object(813561724812656710)
-    #     teams_channel = discord.Object(813561746388287540)
-    #     db_path = "sc2.db"
-    # else:
-    #     ones_channel = discord.Object(790313550270693396)
-    #     teams_channel = discord.Object(790313583484731422)
-    #     db_path = "risk_old_clean.db"
     client.loop.create_task(my_background_task())
     client.run(args.token)
     

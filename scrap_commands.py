@@ -1,3 +1,50 @@
+def find_user_by_name(ctx, name):
+    conn = sqlite3.connect(db_path, uri=True)
+    c = conn.cursor()
+    out = None
+
+    if len(name) == 0:
+        # Tried without an input
+        out = ctx.message.author
+    else:
+        # Test to see if it's a ping
+        server = ctx.message.guild
+        if name[0:2] == "<@":
+            if name[2] == "!":
+                player = server.get_member(name[3:-1])
+            else:
+                player = server.get_member(name[2:-1])
+            if player is not None:
+                out = player
+        else:
+            # Test to see if it's a username
+            player = server.get_member_named(name)
+            if player is not None:
+                out = player
+            else:
+                # Check the database to see if it's a username
+                conn = sqlite3.connect(db_path, uri=True)
+
+                c = conn.cursor()
+                c.execute("SELECT ID FROM players WHERE name LIKE ?", [name])
+                result = c.fetchone()
+                if result is not None:
+                    player = server.get_member(result[0])
+                    if player is not None:
+                        out = player
+                else:
+                    # Check the database to see if it's LIKE a username
+                    wildcard_name = name + "%"
+                    c.execute("SELECT ID FROM players WHERE name LIKE ?", [wildcard_name])
+                    result = c.fetchone()
+                    if result is not None:
+                        player = server.get_member(result[0])
+                        if player is not None:
+                            out = player
+    conn.commit()
+    conn.close()
+    return out
+
 @client.command()
 @commands.has_any_role('League Admin', 'Primary Developer')
 async def forcejoin(ctx, player):
