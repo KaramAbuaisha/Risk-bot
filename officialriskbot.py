@@ -6,24 +6,20 @@ import random
 import re
 import requests
 import asyncio
-
-# import json
+import math
 
 from collections import defaultdict, deque
 from copy import deepcopy
 
 import discord
 
-# from discord.ext.commands import bot
 from discord.ext import commands
 
 # Discord Client
-# client = discord.Client()
 bot_prefix = "!"
 intents = discord.Intents.default()
 intents.members = True
 client = commands.Bot(command_prefix=bot_prefix, intents=intents)
-# client = commands.Bot(command_prefix=bot_prefix)
 
 ones_channel = discord.Object(790313550270693396)
 teams_channel = discord.Object(790313583484731422)
@@ -46,7 +42,7 @@ def erfc(x):
     """Complementary error function (via http://bit.ly/zOLqbc)"""
     z = abs(x)
     t = 1. / (1. + z / 2.)
-    r = t * np.math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (
+    r = t * math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (
         0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (
             0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (
                 -0.82215223 + t * 0.17087277
@@ -86,7 +82,7 @@ def generate_sequence(player1_wins, player2_wins):
 
 def cdf(x, mu=0, sigma=1):
     """Cumulative distribution function"""
-    return 0.5 * erfc(-(x - mu) / (sigma * np.math.sqrt(2)))
+    return 0.5 * erfc(-(x - mu) / (sigma * math.sqrt(2)))
 
 
 def get_win_probability(elo1, sigma1, elo2, sigma2):
@@ -94,14 +90,6 @@ def get_win_probability(elo1, sigma1, elo2, sigma2):
     sumSigma = sigma1 ** 2 + sigma2 ** 2
     rsss = np.sqrt(2 * (BETA ** 2) + sumSigma)
     return cdf(deltaMu / rsss)
-
-
-def safeName(name):
-    """Changes player's names that will mess up the discord leaderboard formatting to unsafe_name"""
-    safe_name = "".join(e for e in name if e.isalnum())
-    if safe_name == "":
-        safe_name = "unsafe_name"
-    return safe_name
 
 
 def find_userid_by_name(ctx, name):
@@ -118,56 +106,6 @@ def find_userid_by_name(ctx, name):
     else:
         # Test to see if it's a ping
         # server = ctx.message.guild
-        if name[0:2] == "<@":
-            if name[2] == "!":
-                player = ctx.guild.get_member(int(name[3:-1]))
-            else:
-                player = ctx.guild.get_member(int(name[2:-1]))
-            if player is not None:
-                out = player.id
-        else:
-            # Test to see if it's a username
-            # player = server.get_member_named(name)
-            # if player is not None:
-            #     out = player.id
-            # else:
-            # Check the database to see if it's a username
-            c.execute(f"SELECT ID FROM {players_table} WHERE name LIKE ?", [name])
-            result = c.fetchone()
-            if result is not None:
-                out = result[0]
-            else:
-                # Check the database to see if it's LIKE a username
-                wildcard_name = name + "%"
-                c.execute(
-                    f"SELECT ID FROM {players_table} WHERE name LIKE ?", [wildcard_name]
-                )
-                result = c.fetchone()
-                if result is not None:
-                    out = result[0]
-    conn.commit()
-    conn.close()
-    if out is not None:
-        return int(out)
-    else:
-        return None
-
-
-def find_userid_by_name_old(ctx, name, db_path):
-
-    conn = sqlite3.connect(db_path, uri=True)
-    c = conn.cursor()
-    out = None
-    players_table = "players"
-    if ctx.channel.id == teams_channel.id:
-        players_table += "_team"
-
-    if len(name) == 0:
-        # Tried without an input
-        out = ctx.message.author.id
-    else:
-        # Test to see if it's a ping
-        server = ctx.message.guild
         if name[0:2] == "<@":
             if name[2] == "!":
                 player = ctx.guild.get_member(int(name[3:-1]))
@@ -240,7 +178,6 @@ async def leaderboard_team():
         sigma = float(sigma)
         peak_elo = float(peak_elo)
 
-        # name = safeName(name[:20])
         rank = i + 1
         total_games = win + loss
 
@@ -261,7 +198,6 @@ async def leaderboard_team():
         )
 
         if rank % 15 == 0:
-            # await leaderboard_channel.send(msg + '```')
             if msg_num >= len(msg_ids):
                 await leaderboard_channel.send(msg + "```")
             else:
@@ -272,7 +208,6 @@ async def leaderboard_team():
             msg = "```\n"
 
     if msg != "```\n":
-        # await leaderboard_channel.send(msg + '```')
         if msg_num >= len(msg_ids):
             await leaderboard_channel.send(msg + "```")
         else:
@@ -447,18 +382,8 @@ async def leaderboard_solo(decay=False):
         sigma = float(sigma)
         peak_elo = float(peak_elo)
 
-        # name = safeName(name[:20])
         rank += 1
         total_games = win + loss
-        # member = guild.get_member(player[5])
-
-        # if member is not None:
-        #     if member.nick is not None:
-        #         name = member.nick
-        #     else:
-        #         name = member.name
-        # else:
-        #     name = player[0]
 
         c.execute("UPDATE players SET rank = ? WHERE ID = ?", [rank, player_id])
         conn.commit()
@@ -759,7 +684,6 @@ async def leaderboard_ffa():
         sigma = float(sigma)
         peak_elo = float(peak_elo)
 
-        # name = safeName(name[:20])
         rank = i + 1
         total_games = win + loss
 
@@ -780,7 +704,6 @@ async def leaderboard_ffa():
         )
 
         if rank % 15 == 0:
-            # await leaderboard_channel.send(msg + '```')
             if msg_num >= len(msg_ids):
                 await leaderboard_channel.send(msg + "```")
             else:
@@ -791,7 +714,6 @@ async def leaderboard_ffa():
             msg = "```\n"
 
     if msg != "```\n":
-        # await leaderboard_channel.send(msg + '```')
         if msg_num >= len(msg_ids):
             await leaderboard_channel.send(msg + "```")
         else:
@@ -866,62 +788,6 @@ async def register(ctx, member: discord.Member):
             await ctx.send("User is already registered.")
 
 
-# TODO:
-# @client.command()
-# @commands.has_any_role('League Admin')
-# async def unregister(ctx):
-#     """Unregister user."""
-#     await ctx.send("User unregistered.")
-
-
-@client.command()
-@commands.has_any_role("League Admin")
-async def search(ctx, gn):
-    """Searches through Warcraft III gamelist."""
-
-    result = requests.get("https://api.wc3stats.com/gamelist")
-
-    gamelist = result.json()
-
-    games = []
-    for game in gamelist["body"]:
-        if re.search(gn, game["name"], re.IGNORECASE):
-            slots_taken = game["slotsTaken"]
-            slots_total = game["slotsTotal"]
-            emb = discord.Embed(
-                description="**Server:** ["
-                + game["server"]
-                + "] /n **Game Name:** "
-                + game["name"]
-                + "/n **Slots:** ("
-                + str(slots_taken)
-                + "/"
-                + str(slots_total)
-                + ")"
-                "/n **Host:** [" + game["host"] + "]",
-                colour=0x3DF27,
-            )
-            games.append(
-                "["
-                + game["server"]
-                + "] "
-                + game["name"]
-                + " ("
-                + str(slots_taken)
-                + "/"
-                + str(slots_total)
-                + ")"
-                " [" + game["host"] + "]"
-            )
-
-    if len(games) <= 0:
-        await ctx.send("No games found.")
-
-    else:
-        for game in games:
-            await ctx.send(game)
-
-
 @client.command()
 async def peak(ctx, name=None):
     """Show's the highest ELO reached by a player."""
@@ -962,47 +828,6 @@ async def purge(ctx, limit: int, channel: discord.TextChannel = None):
         await ctx.channel.purge(limit=limit + 1)
     else:
         await channel.purge(limit=limit)
-
-
-@client.command()
-async def stats_old(ctx, name=None):
-    """Shows a players old statistics."""
-
-    teams = False
-    players_table = "players"
-
-    if ctx.channel.id == teams_channel.id:
-        teams = True
-        players_table += "_team"
-
-    for i, db_path in enumerate(old_dbs):
-        conn = sqlite3.connect(db_path, uri=True)
-
-        if name is None:
-            player_id = ctx.author.id
-        else:
-            player_id = find_userid_by_name_old(ctx, name, db_path)
-            if player_id is None:
-                continue
-
-        c = conn.cursor()
-        c.execute(
-            f"SELECT name, elo, sigma, win, loss, streak, peak_elo, rank FROM {players_table} where ID = ?",
-            [player_id],
-        )
-        player = c.fetchone()
-
-        if player is not None:
-            name, elo, sigma, win, loss, streak, peak_elo, rank = player
-            total_games = win + loss
-
-            if total_games > 0:
-                await ctx.send(
-                    f"Season {i+1}:\n Name: {name} | Elo: **{elo:.1f}** | Sigma: **{sigma:.1f}** | Rank: **{rank if rank else 'Unranked'}** | **{win}**W - **{loss}**L (**{(win / total_games) * 100:.1f}% Win Rate**)"
-                )
-
-        conn.commit()
-        conn.close()
 
 
 @client.command()
@@ -1073,21 +898,6 @@ async def stats(ctx, name=None):
         elif rank <= 4:
             url = master
             emoji = "<:master:821047027412631603>"
-        # elif rank <= 8:
-        #     url = diamond
-        #     emoji = "<:diamond:821047028237860924>"
-        # elif rank <= 12:
-        #     url = platinum
-        #     emoji = "<:platinum:821047027584467004>"
-        # elif rank <= 16:
-        #     url = gold
-        #     emoji = "<:gold:821047027675955200>"
-        # elif rank <= 20:
-        #     url = silver
-        #     emoji = "<:silver:821047027374751806>"
-        # else:
-        #     url = bronze
-        #     emoji = "<:bronze:821047027575422996>"
         elif rank <= 8:
             url = expert
             emoji = "<:expert:821047027391660094>"
@@ -1205,310 +1015,45 @@ async def stats(ctx, name=None):
     conn.commit()
     conn.close()
 
-
 @client.command()
-@commands.cooldown(3, 5, commands.BucketType.user)
-async def compare_old(ctx, p1, p2):
+async def stats_past(ctx, name=None):
+    """Shows a players past season statistics."""
 
-    """Compares two users old statistics."""
+    teams = False
+    players_table = "players"
 
-    for season_number, db_path in enumerate(old_dbs):
+    if ctx.channel.id == teams_channel.id:
+        teams = True
+        players_table += "_team"
 
-        if ctx.channel.id == ones_channel.id:
+    for i, db_path in enumerate(old_dbs):
+        conn = sqlite3.connect(db_path, uri=True)
 
-            conn = sqlite3.connect(db_path, uri=True)
-            c = conn.cursor()
-
-            t1 = find_userid_by_name_old(ctx, p1, db_path)
-            if t1 is None:
+        if name is None:
+            player_id = ctx.author.id
+        else:
+            player_id = find_userid_by_name(ctx, name)
+            if player_id is None:
                 continue
 
-            c.execute("SELECT name, elo, sigma FROM players where ID = ?", [t1])
-            result = c.fetchone()
-            if result is None:
-                continue
-            name1 = result[0]
-            elo1 = float(result[1])
-            sigma1 = float(result[2])
+        c = conn.cursor()
+        c.execute(
+            f"SELECT name, elo, sigma, win, loss, streak, peak_elo, rank FROM {players_table} where ID = ?",
+            [player_id],
+        )
+        player = c.fetchone()
 
-            t2 = find_userid_by_name_old(ctx, p2, db_path)
-            if t2 is None:
-                continue
+        if player is not None:
+            name, elo, sigma, win, loss, streak, peak_elo, rank = player
+            total_games = win + loss
 
-            c.execute("SELECT name, elo, sigma FROM players where ID = ?", [t2])
-            result = c.fetchone()
-            if result is None:
-                continue
-            name2 = result[0]
-            elo2 = float(result[1])
-            sigma2 = float(result[2])
-
-            wins = 0
-            losses = 0
-
-            wins_q = list()
-            losses_q = list()
-
-            c.execute(
-                "SELECT ID, s1 FROM games WHERE (p1 == ? AND p2 == ?) AND s1 != s2 ORDER BY ID ASC",
-                [t1, t2],
-            )
-            game = c.fetchone()
-            while game is not None:
-                i, result = game
-                # print(i, result)
-                if result == "won":
-                    wins += 1
-                    wins_q.append(i)
-                elif result == "lost":
-                    losses += 1
-                    losses_q.append(i)
-                else:
-                    # shouldn't happen, maybe error or print to terminal
-                    pass
-
-                game = c.fetchone()
-
-            c.execute(
-                "SELECT ID, s2 FROM games WHERE (p1 == ? AND p2 == ?) AND s1 != s2 ORDER BY ID ASC",
-                [t2, t1],
-            )
-            game = c.fetchone()
-            while game is not None:
-                i, result = game
-                if result == "won":
-                    wins += 1
-                    wins_q.append(i)
-                elif result == "lost":
-                    losses += 1
-                    losses_q.append(i)
-                else:
-                    # shouldn't happen, maybe error or print to terminal
-                    pass
-
-                game = c.fetchone()
-
-            wins_q.sort()
-            losses_q.sort()
-
-            win_probability = get_win_probability(elo1, sigma1, elo2, sigma2)
-
-            if wins + losses > 0:
-                s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have played a total of {wins + losses} games together.\n"
-                s += f"{name1} has a win rate of {wins/(wins+losses)*100:.2f}% (**{wins}W - {losses}L**) against {name2}.\n"
-                if wins + losses > 20:
-                    i = 0
-                    wins_20 = 0
-                    losses_20 = 0
-                    while wins_q and losses_q and i < 20:
-                        # print(wins_q[-1], losses_q[-1])
-                        if wins_q[-1] > losses_q[-1]:
-                            wins_20 += 1
-                            wins_q.pop()
-                        else:
-                            losses_20 += 1
-                            losses_q.pop()
-                        i += 1
-                    if i < 20:
-                        if wins_q:
-                            wins_20 += 20 - i
-                        else:
-                            losses_20 += 20 - i
-                    s += f"{name1} has a win rate of {wins_20/(wins_20+losses_20)*100:.2f}% (**{wins_20}W - {losses_20}L**) against {name2} in the last 20 games.\n"
-
-            else:
-                s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have not played any games together.\n"
-
-            s += f"{name1}'s expected win probability against {name2} is {win_probability*100:.2f}%."
-
-            await ctx.send(f"Season {season_number+1}:")
-            await ctx.send(s)
-            conn.commit()
-            conn.close()
-
-        if ctx.channel.id == teams_channel.id:
-
-            conn = sqlite3.connect(db_path, uri=True)
-            c = conn.cursor()
-
-            x = ctx.author.id
-
-            t1 = find_userid_by_name_old(ctx, p1, db_path)
-            if t1 is None:
-                await ctx.send('No user found by the name "' + p1 + '"!')
-                conn.commit()
-                conn.close()
-                return
-
-            c.execute("SELECT name, elo FROM players_team where ID = ?", [t1])
-            result = c.fetchone()
-            if result is None:
-                await ctx.send('No user found by the name "' + p1 + '"!')
-                conn.commit()
-                conn.close()
-                return
-            name1 = result[0]
-            elo1 = str(result[1])
-
-            t2 = find_userid_by_name_old(ctx, p2, db_path)
-            if t2 is None:
-                await ctx.send('No user found by the name "' + p2 + '"!')
-                conn.commit()
-                conn.close()
-                return
-
-            c.execute("SELECT name, elo FROM players_team where ID = ?", [t2])
-            result = c.fetchone()
-            if result is None:
-                await ctx.send('No user found by the name "' + p2 + '"!')
-                conn.commit()
-                conn.close()
-                return
-            name2 = result[0]
-            elo2 = str(result[1])
-
-            wins_together = 0
-            loss_together = 0
-            wins_against = 0
-            loss_against = 0
-
-            c.execute(
-                "SELECT s1, s2, ID FROM games_team where (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND s1 != s2",
-                [t1, t1, t1, t1, t2, t2, t2, t2],
-            )
-            game = c.fetchone()
-            while game is not None:
-                s1 = game[0]
-                s2 = game[1]
-                if s1 > s2:
-                    wins_together += 1
-                elif s1 < s2:
-                    loss_together += 1
-
-                game = c.fetchone()
-
-            c.execute(
-                "SELECT s1, s2, ID FROM games_team where (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND s1 != s2",
-                [t1, t1, t1, t1, t2, t2, t2, t2],
-            )
-            game = c.fetchone()
-            while game is not None:
-                s1 = game[0]
-                s2 = game[1]
-
-                if s1 < s2:
-                    wins_together += 1
-                elif s1 > s2:
-                    loss_together += 1
-
-                game = c.fetchone()
-
-            c.execute(
-                "SELECT s1, s2 FROM games_team where (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND s1 != s2",
-                [t1, t1, t1, t1, t2, t2, t2, t2],
-            )
-            game = c.fetchone()
-            while game is not None:
-                s1 = game[0]
-                s2 = game[1]
-
-                if s1 > s2:
-                    wins_against += 1
-                elif s1 < s2:
-                    loss_against += 1
-
-                game = c.fetchone()
-
-            c.execute(
-                "SELECT s1, s2 FROM games_team where (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND s1 != s2",
-                [t1, t1, t1, t1, t2, t2, t2, t2],
-            )
-            game = c.fetchone()
-            while game is not None:
-                s1 = game[0]
-                s2 = game[1]
-
-                if s1 < s2:
-                    wins_against += 1
-                elif s1 > s2:
-                    loss_against += 1
-
-                game = c.fetchone()
-
-            total_together = wins_together + loss_together
-            if total_together > 0:
-                winrate_together = float(
-                    "{0:.2f}".format((wins_together / total_together) * 100)
-                )
-                str_together = (
-                    name1
-                    + " **["
-                    + elo1
-                    + "]** and "
-                    + name2
-                    + " **["
-                    + elo2
-                    + "]** have played "
-                    + str(total_together)
-                    + " games together with a win rate of "
-                    + str(winrate_together)
-                    + "% (**"
-                    + str(wins_together)
-                    + "W - "
-                    + str(loss_together)
-                    + "L**)."
-                )
-            else:
-                str_together = (
-                    name1
-                    + " **["
-                    + elo1
-                    + "]** and "
-                    + name2
-                    + " **["
-                    + elo2
-                    + "]** have not played together."
+            if total_games > 0:
+                await ctx.send(
+                    f"Season {i+1}:\n Name: {name} | Elo: **{elo:.1f}** | Sigma: **{sigma:.1f}** | Rank: **{rank if rank else 'Unranked'}** | **{win}**W - **{loss}**L (**{(win / total_games) * 100:.1f}% Win Rate**)"
                 )
 
-            total_against = wins_against + loss_against
-            if total_against > 0:
-                winrate_against = float(
-                    "{0:.2f}".format((wins_against / total_against) * 100)
-                )
-                str_against = (
-                    name1
-                    + " **["
-                    + elo1
-                    + "]** has played against "
-                    + name2
-                    + " **["
-                    + elo2
-                    + "]** a total of "
-                    + str(total_against)
-                    + " times with a win rate of "
-                    + str(winrate_against)
-                    + "% (**"
-                    + str(wins_against)
-                    + "W - "
-                    + str(loss_against)
-                    + "L**) ."
-                )
-            else:
-                str_against = (
-                    name1
-                    + " **["
-                    + elo1
-                    + "]** and "
-                    + name2
-                    + " **["
-                    + elo2
-                    + "]** have not played against each other."
-                )
-
-            await ctx.send(str_together + "\n" + str_against)
-            conn.commit()
-            conn.close()
-
+        conn.commit()
+        conn.close()
 
 @client.command()
 @commands.cooldown(3, 5, commands.BucketType.user)
@@ -1570,7 +1115,6 @@ async def compare(ctx, p1, p2):
         game = c.fetchone()
         while game is not None:
             i, result = game
-            # print(i, result)
             if result == "won":
                 wins += 1
                 wins_q.append(i)
@@ -1578,8 +1122,7 @@ async def compare(ctx, p1, p2):
                 losses += 1
                 losses_q.append(i)
             else:
-                # shouldn't happen, maybe error or print to terminal
-                pass
+                print(f"Unknown result: {result} for game {i}")
 
             game = c.fetchone()
 
@@ -1597,8 +1140,7 @@ async def compare(ctx, p1, p2):
                 losses += 1
                 losses_q.append(i)
             else:
-                # shouldn't happen, maybe error or print to terminal
-                pass
+                print(f"Unknown result: {result} for game {i}")
 
             game = c.fetchone()
 
@@ -1607,7 +1149,7 @@ async def compare(ctx, p1, p2):
 
         win_probability = get_win_probability(elo1, sigma1, elo2, sigma2)
 
-        def get_x(x):
+        def get_winrate_in_last_x_games(x):
             wins_q_tmp = deepcopy(wins_q)
             losses_q_tmp = deepcopy(losses_q)
             if wins + losses > x:
@@ -1635,10 +1177,10 @@ async def compare(ctx, p1, p2):
         if wins + losses > 0:
             s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have played a total of {wins + losses} games together.\n"
             s += f"{name1} has a win rate of {wins/(wins+losses)*100:.2f}% (**{wins}W - {losses}L**) against {name2}.\n"
-            s += get_x(20)
-            # s += get_x(30)
-            # s += get_x(40)
-            s += get_x(50)
+            s += get_winrate_in_last_x_games(20)
+            # s += get_winrate_in_last_x_games(30)
+            # s += get_winrate_in_last_x_games(40)
+            s += get_winrate_in_last_x_games(50)
         else:
             s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have not played any games together.\n"
 
@@ -1761,33 +1303,13 @@ async def compare(ctx, p1, p2):
                 "{0:.2f}".format((wins_together / total_together) * 100)
             )
             str_together = (
-                name1
-                + " **["
-                + elo1
-                + "]** and "
-                + name2
-                + " **["
-                + elo2
-                + "]** have played "
-                + str(total_together)
-                + " games together with a win rate of "
-                + str(winrate_together)
-                + "% (**"
-                + str(wins_together)
-                + "W - "
-                + str(loss_together)
-                + "L**)."
+                f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have played "
+                f"{total_together} games together with a win rate of "
+                f"{winrate_together}% (**{wins_together}W - {loss_together}L**)."
             )
         else:
             str_together = (
-                name1
-                + " **["
-                + elo1
-                + "]** and "
-                + name2
-                + " **["
-                + elo2
-                + "]** have not played together."
+                f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have not played together."
             )
 
         total_against = wins_against + loss_against
@@ -1796,38 +1318,281 @@ async def compare(ctx, p1, p2):
                 "{0:.2f}".format((wins_against / total_against) * 100)
             )
             str_against = (
-                name1
-                + " **["
-                + elo1
-                + "]** has played against "
-                + name2
-                + " **["
-                + elo2
-                + "]** a total of "
-                + str(total_against)
-                + " times with a win rate of "
-                + str(winrate_against)
-                + "% (**"
-                + str(wins_against)
-                + "W - "
-                + str(loss_against)
-                + "L**) ."
+                f"{name1} **[{elo1}]** has played against {name2} **[{elo2}]** "
+                f"a total of {total_against} times with a win rate of "
+                f"{winrate_against}% (**{wins_against}W - {loss_against}L**) ."
             )
         else:
             str_against = (
-                name1
-                + " **["
-                + elo1
-                + "]** and "
-                + name2
-                + " **["
-                + elo2
-                + "]** have not played against each other."
+                f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have not played against each other."
             )
 
         await ctx.send(str_together + "\n" + str_against)
         conn.commit()
         conn.close()
+
+
+@client.command()
+@commands.cooldown(3, 5, commands.BucketType.user)
+async def compare_past(ctx, p1, p2):
+    """Compares two users previous season statistics."""
+
+    for season_number, db_path in enumerate(old_dbs):
+
+        if ctx.channel.id == ones_channel.id:
+
+            conn = sqlite3.connect(db_path, uri=True)
+            c = conn.cursor()
+
+            t1 = find_userid_by_name(ctx, p1)
+            if t1 is None:
+                continue
+
+            c.execute("SELECT name, elo, sigma FROM players where ID = ?", [t1])
+            result = c.fetchone()
+            if result is None:
+                continue
+            name1 = result[0]
+            elo1 = float(result[1])
+            sigma1 = float(result[2])
+
+            t2 = find_userid_by_name(ctx, p2)
+            if t2 is None:
+                continue
+
+            c.execute("SELECT name, elo, sigma FROM players where ID = ?", [t2])
+            result = c.fetchone()
+            if result is None:
+                continue
+            name2 = result[0]
+            elo2 = float(result[1])
+            sigma2 = float(result[2])
+
+            wins = 0
+            losses = 0
+
+            wins_q = list()
+            losses_q = list()
+
+            c.execute(
+                "SELECT ID, s1 FROM games WHERE (p1 == ? AND p2 == ?) AND s1 != s2 ORDER BY ID ASC",
+                [t1, t2],
+            )
+            game = c.fetchone()
+            while game is not None:
+                i, result = game
+                # print(i, result)
+                if result == "won":
+                    wins += 1
+                    wins_q.append(i)
+                elif result == "lost":
+                    losses += 1
+                    losses_q.append(i)
+                else:
+                    # shouldn't happen, maybe error or print to terminal
+                    pass
+
+                game = c.fetchone()
+
+            c.execute(
+                "SELECT ID, s2 FROM games WHERE (p1 == ? AND p2 == ?) AND s1 != s2 ORDER BY ID ASC",
+                [t2, t1],
+            )
+            game = c.fetchone()
+            while game is not None:
+                i, result = game
+                if result == "won":
+                    wins += 1
+                    wins_q.append(i)
+                elif result == "lost":
+                    losses += 1
+                    losses_q.append(i)
+                else:
+                    # shouldn't happen, maybe error or print to terminal
+                    pass
+
+                game = c.fetchone()
+
+            wins_q.sort()
+            losses_q.sort()
+
+            win_probability = get_win_probability(elo1, sigma1, elo2, sigma2)
+
+            if wins + losses > 0:
+                s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have played a total of {wins + losses} games together.\n"
+                s += f"{name1} has a win rate of {wins/(wins+losses)*100:.2f}% (**{wins}W - {losses}L**) against {name2}.\n"
+                if wins + losses > 20:
+                    i = 0
+                    wins_20 = 0
+                    losses_20 = 0
+                    while wins_q and losses_q and i < 20:
+                        # print(wins_q[-1], losses_q[-1])
+                        if wins_q[-1] > losses_q[-1]:
+                            wins_20 += 1
+                            wins_q.pop()
+                        else:
+                            losses_20 += 1
+                            losses_q.pop()
+                        i += 1
+                    if i < 20:
+                        if wins_q:
+                            wins_20 += 20 - i
+                        else:
+                            losses_20 += 20 - i
+                    s += f"{name1} has a win rate of {wins_20/(wins_20+losses_20)*100:.2f}% (**{wins_20}W - {losses_20}L**) against {name2} in the last 20 games.\n"
+
+            else:
+                s = f"{name1} (Elo: {int(round(elo1))}, Sigma: {int(round(sigma1))}) and {name2} (Elo: {int(round(elo2))}, Sigma: {int(round(sigma2))}) have not played any games together.\n"
+
+            s += f"{name1}'s expected win probability against {name2} is {win_probability*100:.2f}%."
+
+            await ctx.send(f"Season {season_number+1}:")
+            await ctx.send(s)
+            conn.commit()
+            conn.close()
+
+        if ctx.channel.id == teams_channel.id:
+
+            conn = sqlite3.connect(db_path, uri=True)
+            c = conn.cursor()
+
+            x = ctx.author.id
+
+            t1 = find_userid_by_name(ctx, p1)
+            if t1 is None:
+                await ctx.send('No user found by the name "' + p1 + '"!')
+                conn.commit()
+                conn.close()
+                return
+
+            c.execute("SELECT name, elo FROM players_team where ID = ?", [t1])
+            result = c.fetchone()
+            if result is None:
+                await ctx.send('No user found by the name "' + p1 + '"!')
+                conn.commit()
+                conn.close()
+                return
+            name1 = result[0]
+            elo1 = str(result[1])
+
+            t2 = find_userid_by_name(ctx, p2)
+            if t2 is None:
+                await ctx.send('No user found by the name "' + p2 + '"!')
+                conn.commit()
+                conn.close()
+                return
+
+            c.execute("SELECT name, elo FROM players_team where ID = ?", [t2])
+            result = c.fetchone()
+            if result is None:
+                await ctx.send('No user found by the name "' + p2 + '"!')
+                conn.commit()
+                conn.close()
+                return
+            name2 = result[0]
+            elo2 = str(result[1])
+
+            wins_together = 0
+            loss_together = 0
+            wins_against = 0
+            loss_against = 0
+
+            c.execute(
+                "SELECT s1, s2, ID FROM games_team where (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND s1 != s2",
+                [t1, t1, t1, t1, t2, t2, t2, t2],
+            )
+            game = c.fetchone()
+            while game is not None:
+                s1 = game[0]
+                s2 = game[1]
+                if s1 > s2:
+                    wins_together += 1
+                elif s1 < s2:
+                    loss_together += 1
+
+                game = c.fetchone()
+
+            c.execute(
+                "SELECT s1, s2, ID FROM games_team where (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND s1 != s2",
+                [t1, t1, t1, t1, t2, t2, t2, t2],
+            )
+            game = c.fetchone()
+            while game is not None:
+                s1 = game[0]
+                s2 = game[1]
+
+                if s1 < s2:
+                    wins_together += 1
+                elif s1 > s2:
+                    loss_together += 1
+
+                game = c.fetchone()
+
+            c.execute(
+                "SELECT s1, s2 FROM games_team where (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND s1 != s2",
+                [t1, t1, t1, t1, t2, t2, t2, t2],
+            )
+            game = c.fetchone()
+            while game is not None:
+                s1 = game[0]
+                s2 = game[1]
+
+                if s1 > s2:
+                    wins_against += 1
+                elif s1 < s2:
+                    loss_against += 1
+
+                game = c.fetchone()
+
+            c.execute(
+                "SELECT s1, s2 FROM games_team where (p5 == ? OR p6 == ? OR p7 == ? OR p8 == ?) AND (p1 == ? OR p2 == ? OR p3 == ? OR p4 == ?) AND s1 != s2",
+                [t1, t1, t1, t1, t2, t2, t2, t2],
+            )
+            game = c.fetchone()
+            while game is not None:
+                s1 = game[0]
+                s2 = game[1]
+
+                if s1 < s2:
+                    wins_against += 1
+                elif s1 > s2:
+                    loss_against += 1
+
+                game = c.fetchone()
+
+            total_together = wins_together + loss_together
+            if total_together > 0:
+                winrate_together = float(
+                    "{0:.2f}".format((wins_together / total_together) * 100)
+                )
+                str_together = (
+                    f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have played "
+                    f"{total_together} games together with a win rate of "
+                    f"{winrate_together}% (**{wins_together}W - {loss_together}L**)."
+                )
+            else:
+                str_together = (
+                    f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have not played together."
+                )
+
+            total_against = wins_against + loss_against
+            if total_against > 0:
+                winrate_against = float(
+                    "{0:.2f}".format((wins_against / total_against) * 100)
+                )
+                str_against = (
+                    f"{name1} **[{elo1}]** has played against {name2} **[{elo2}]** "
+                    f"a total of {total_against} times with a win rate of "
+                    f"{winrate_against}% (**{wins_against}W - {loss_against}L**) ."
+                )
+            else:
+                str_against = (
+                    f"{name1} **[{elo1}]** and {name2} **[{elo2}]** have not played against each other."
+                )
+
+            await ctx.send(str_together + "\n" + str_against)
+            conn.commit()
+            conn.close()
 
 
 @client.command()
@@ -2272,18 +2037,20 @@ async def record(ctx, *args):
     await leaderboard_solo()
 
 
-# @client.command()
-# @commands.has_any_role("League Admin")
-# async def delete_records(ctx, num_games):
-#     '''Admin command for recording 1v1s.'''
+@client.command()
+@commands.has_any_role("League Admin")
+async def delete_records(ctx, num_games):
+    """Admin command for deleting last N recorded games."""
 
-#     conn = sqlite3.connect(db_path, uri=True)
-#     c = conn.cursor()
-#     c.execute(f""" DELETE from games where ID IN (SELECT ID from games order by ID desc limit {num_games})""")
-#     conn.commit()
-#     conn.close()
+    conn = sqlite3.connect(db_path, uri=True)
+    c = conn.cursor()
+    c.execute(
+        f""" DELETE from games where ID IN (SELECT ID from games order by ID desc limit {num_games})"""
+    )
+    conn.commit()
+    conn.close()
 
-#     await leaderboard_solo()
+    await leaderboard_solo()
 
 
 @client.command()
